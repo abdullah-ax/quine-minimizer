@@ -4,6 +4,7 @@
 
 #ifndef DD1_PROJ1_QUINE_H
 #define DD1_PROJ1_QUINE_H
+
 #include <string>
 #include <vector>
 #include <set>
@@ -12,41 +13,43 @@
 using namespace std;
 
 struct Implicant {
-    uint64_t bits;   // bit values
-    uint64_t mask;   // 1 => don't-care ('-') at that bit
-    set<int> covers; // minterms (include don't-cares here too)
+    uint64_t binary_value;
+    uint64_t dont_care_mask;
+    set<int> covered_minterms;
 
-    int var_count() const;
-    string to_binary(int n) const;
-    string to_expression(int n) const;
-    bool covers_minterm(int m) const;
-    bool operator<(Implicant const& o) const;
+    string as_binary_string(int variable_count) const;
+    string as_boolean_expression(int variable_count) const;
+    bool operator<(const Implicant& other) const;
 };
 
-struct QMResult {
-    vector<Implicant> prime_implicants;
-    vector<Implicant> essential_implicants;
-    vector<int> uncovered_minterms;
-    vector<vector<Implicant>> minimal_solutions;
+struct MinimizationResult {
+    vector<Implicant> all_prime_implicants;
+    vector<Implicant> essential_prime_implicants;
+    vector<int> minterms_not_covered_by_essentials;
+    vector<vector<Implicant>> all_minimal_solutions;
 };
 
 class QuineMcCluskey {
 public:
     QuineMcCluskey() = default;
-    bool parse_input_file(const string& path);
-    QMResult solve();
 
-    // data filled by parse_input_file
-    int num_vars = 0;
-    vector<int> minterms;
-    vector<int> dontcares;
+    bool load_from_file(const string& file_path);
+    MinimizationResult minimize();
+
+    int variable_count = 0;
+    vector<int> function_minterms;
+    vector<int> function_dont_cares;
 
 private:
-    vector<Implicant> initial_implicants() const;
-    vector<Implicant> generate_prime_implicants() const;
-    void build_pi_chart(const vector<Implicant>& pis,
-                        vector<vector<int>>& chart,
-                        vector<int>& minterm_list) const;
-    QMResult compute_solution(const vector<Implicant>& pis) const;
+    vector<Implicant> create_initial_implicants() const;
+    vector<Implicant> find_all_prime_implicants() const;
+    vector<Implicant> extract_essential_prime_implicants(
+        const vector<Implicant>& prime_implicants,
+        vector<int>& uncovered_minterms) const;
+    vector<vector<Implicant>> find_minimal_covers(
+        const vector<Implicant>& prime_implicants,
+        const vector<Implicant>& essentials,
+        const vector<int>& uncovered_minterms) const;
 };
-#endif //DD1_PROJ1_QUINE_H
+
+#endif // DD1_PROJ1_QUINE_H
