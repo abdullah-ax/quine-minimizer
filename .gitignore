@@ -1,0 +1,53 @@
+# Build directories
+/build/
+/bin/
+/out/
+
+# CMake files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+CTestTestfile.cmake
+compile_commands.json
+
+# CLion / JetBrains
+.idea/
+*.iml
+*.iws
+workspace.xml
+shelf/
+
+# Executables and object files
+*.o
+*.obj
+*.exe
+*.out
+*.app
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+
+# Temporary files
+*~
+*.swp
+*.tmp
+*.log
+*.orig
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Coverage and reports
+coverage/
+*.gcda
+*.gcno
+*.gcov
+
+# Other generated files
+*.gch
