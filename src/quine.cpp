@@ -65,3 +65,13 @@ static vector<string> split_by_comma(const string& text) {
     }
     return tokens;
 }
+
+static string trim_whitespace(string text) {
+    while (!text.empty() && isspace(static_cast<unsigned char>(text.front()))) {
+        text.erase(text.begin());
+    }
+    while (!text.empty() && isspace(static_cast<unsigned char>(text.back()))) {
+        text.pop_back();
+    }
+    return text;
+}
