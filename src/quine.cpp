@@ -96,5 +96,18 @@ bool QuineMcCluskey::load_from_file(const string& file_path) {
     second_line = trim_whitespace(second_line);
     third_line = trim_whitespace(third_line);
 
+    // Parse don't-cares
+    function_dont_cares.clear();
+    if (!third_line.empty()) {
+        for (auto& token : split_by_comma(third_line)) {
+            token = trim_whitespace(token);
+            if (token.size() < 2) return false;
+            if (token[0] != 'd' && token[0] != 'D') return false;
+
+            int value = stoi(token.substr(1));
+            function_dont_cares.push_back(value);
+        }
+    }
+
     return true;
 }
