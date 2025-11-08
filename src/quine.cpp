@@ -512,3 +512,25 @@ vector<vector<Implicant>> QuineMcCluskey::find_minimal_covers(
 
     return all_solutions;
 }
+
+MinimizationResult QuineMcCluskey::minimize() {
+    MinimizationResult result;
+
+    result.all_prime_implicants = find_all_prime_implicants();
+
+    vector<int> uncovered;
+    result.essential_prime_implicants = extract_essential_prime_implicants(
+        result.all_prime_implicants,
+        uncovered
+    );
+
+    result.minterms_not_covered_by_essentials = uncovered;
+
+    result.all_minimal_solutions = find_minimal_covers(
+        result.all_prime_implicants,
+        result.essential_prime_implicants,
+        uncovered
+    );
+
+    return result;
+}
