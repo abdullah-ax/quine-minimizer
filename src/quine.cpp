@@ -24,3 +24,24 @@ string Implicant::as_binary_string(int variable_count) const {
     }
     return result;
 }
+
+string Implicant::as_boolean_expression(int variable_count) const {
+    string expression;
+
+    for (int i = 0; i < variable_count; ++i) {
+        int bit_position = variable_count - 1 - i;
+        bool is_dont_care = (dont_care_mask >> bit_position) & 1;
+
+        if (is_dont_care) continue;
+
+        char variable_name = 'A' + i;
+        bool is_complemented = !((binary_value >> bit_position) & 1);
+
+        expression += variable_name;
+        if (is_complemented) {
+            expression += '\'';
+        }
+    }
+
+    return expression.empty() ? "1" : expression;
+}
