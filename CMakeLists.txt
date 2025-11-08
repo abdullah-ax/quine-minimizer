@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_executable(quine
         src/main.cpp
         src/quine.cpp
+        src/quine.h
+        src/main.cpp
 )
 
 target_include_directories(quine PRIVATE src)

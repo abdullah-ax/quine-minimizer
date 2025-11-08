@@ -2,8 +2,8 @@
 // Created by Abdullah Ahmed on 06/11/2025.
 //
 
-#ifndef DD1_PROJ1_QUINE_H
-#define DD1_PROJ1_QUINE_H
+#ifndef QUINE_MINIMIZER_QUINE_H
+#define QUINE_MINIMIZER_QUINE_H
 
 #include <string>
 #include <vector>
@@ -52,4 +52,4 @@ private:
         const vector<int>& uncovered_minterms) const;
 };
 
-#endif // DD1_PROJ1_QUINE_H
+#endif // QUINE_MINIMIZER_QUINE_H
