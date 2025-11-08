@@ -265,3 +265,68 @@ vector<Implicant> QuineMcCluskey::create_initial_implicants() const {
 
     return initial_list;
 }
+
+static vector<Implicant> combine_implicant_level(
+    const vector<Implicant>& current_level,
+    vector<Implicant>& uncombined) {
+
+    vector<bool> was_combined(current_level.size(), false);
+    vector<Implicant> next_level;
+    set<pair<uint64_t, uint64_t>> seen_combinations;
+
+    for (size_t i = 0; i < current_level.size(); ++i) {
+        for (size_t j = i + 1; j < current_level.size(); ++j) {
+            Implicant combined;
+            if (can_combine_implicants(current_level[i], current_level[j], combined)) {
+                was_combined[i] = was_combined[j] = true;
+
+                auto key = make_pair(combined.binary_value, combined.dont_care_mask);
+                if (seen_combinations.insert(key).second) {
+                    next_level.push_back(combined);
+                }
+            }
+        }
+    }
+
+    uncombined.clear();
+    for (size_t i = 0; i < current_level.size(); ++i) {
+        if (!was_combined[i]) {
+            uncombined.push_back(current_level[i]);
+        }
+    }
+
+    return next_level;
+}
+
+static void sort_by_ones_count(vector<Implicant>& implicants) {
+    sort(implicants.begin(), implicants.end(), [](const Implicant& a, const Implicant& b) {
+        int ones_a = count_ones_in_value(a.binary_value, a.dont_care_mask);
+        int ones_b = count_ones_in_value(b.binary_value, b.dont_care_mask);
+        if (ones_a != ones_b) return ones_a < ones_b;
+        if (a.dont_care_mask != b.dont_care_mask) return a.dont_care_mask < b.dont_care_mask;
+        return a.binary_value < b.binary_value;
+    });
+}
+
+vector<Implicant> QuineMcCluskey::find_all_prime_implicants() const {
+    vector<Implicant> current_level = create_initial_implicants();
+    vector<Implicant> all_primes;
+
+    while (!current_level.empty()) {
+        sort_by_ones_count(current_level);
+
+        vector<Implicant> uncombined;
+        vector<Implicant> next_level = combine_implicant_level(current_level, uncombined);
+
+        all_primes.insert(all_primes.end(), uncombined.begin(), uncombined.end());
+        current_level = move(next_level);
+    }
+
+    sort(all_primes.begin(), all_primes.end());
+    all_primes.erase(
+        unique(all_primes.begin(), all_primes.end(), implicants_are_equal),
+        all_primes.end()
+    );
+
+    return all_primes;
+}
