@@ -53,6 +53,8 @@ bool Implicant::operator<(const Implicant& other) const {
     return binary_value < other.binary_value;
 }
 
+// ==================== Helper Functions ====================
+
 static vector<string> split_by_comma(const string& text) {
     vector<string> tokens;
     stringstream stream(text);
@@ -76,6 +78,97 @@ static string trim_whitespace(string text) {
     return text;
 }
 
+static bool parse_term_value(const string& token, char expected_prefix, int& value) {
+    string trimmed = trim_whitespace(token);
+    if (trimmed.size() < 2) return false;
+
+    char prefix = trimmed[0];
+    if (prefix != expected_prefix && prefix != toupper(expected_prefix) &&
+        prefix != tolower(expected_prefix)) {
+        return false;
+    }
+
+    try {
+        value = stoi(trimmed.substr(1));
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+static bool parse_dont_cares(const string& line, vector<int>& dont_cares) {
+    dont_cares.clear();
+    if (line.empty()) return true;
+
+    for (const auto& token : split_by_comma(line)) {
+        int value;
+        if (!parse_term_value(token, 'd', value)) return false;
+        dont_cares.push_back(value);
+    }
+    return true;
+}
+
+static bool parse_terms_list(const string& line, vector<int>& terms, char& notation_type) {
+    if (line.empty()) return false;
+
+    notation_type = line[0];
+    if (notation_type != 'm' && notation_type != 'M') return false;
+
+    terms.clear();
+    for (const auto& token : split_by_comma(line)) {
+        int value;
+        if (!parse_term_value(token, notation_type, value)) return false;
+        terms.push_back(value);
+    }
+    return true;
+}
+
+static bool has_mixed_notation(const string& line) {
+    if (line.empty()) return false;
+
+    bool has_minterm = false;
+    bool has_maxterm = false;
+
+    for (const auto& token : split_by_comma(line)) {
+        string trimmed = trim_whitespace(token);
+        if (trimmed.empty()) continue;
+
+        char prefix = trimmed[0];
+        if (prefix == 'm') has_minterm = true;
+        if (prefix == 'M') has_maxterm = true;
+    }
+
+    return has_minterm && has_maxterm;
+}
+
+static void convert_maxterms_to_minterms(
+    const vector<int>& maxterms,
+    const vector<int>& dont_cares,
+    int variable_count,
+    vector<int>& minterms) {
+
+    int total_combinations = 1 << variable_count;
+    set<int> maxterm_set(maxterms.begin(), maxterms.end());
+    set<int> dont_care_set(dont_cares.begin(), dont_cares.end());
+
+    minterms.clear();
+    for (int i = 0; i < total_combinations; ++i) {
+        if (maxterm_set.count(i) || dont_care_set.count(i)) continue;
+        minterms.push_back(i);
+    }
+}
+
+static bool validate_no_overlap(const vector<int>& minterms, const vector<int>& dont_cares) {
+    for (int dont_care : dont_cares) {
+        if (find(minterms.begin(), minterms.end(), dont_care) != minterms.end()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// ==================== QuineMcCluskey File Parsing ====================
+
 bool QuineMcCluskey::load_from_file(const string& file_path) {
     ifstream input_file(file_path);
     if (!input_file) return false;
@@ -96,18 +189,21 @@ bool QuineMcCluskey::load_from_file(const string& file_path) {
     second_line = trim_whitespace(second_line);
     third_line = trim_whitespace(third_line);
 
-    // Parse don't-cares
-    function_dont_cares.clear();
-    if (!third_line.empty()) {
-        for (auto& token : split_by_comma(third_line)) {
-            token = trim_whitespace(token);
-            if (token.size() < 2) return false;
-            if (token[0] != 'd' && token[0] != 'D') return false;
+    if (has_mixed_notation(second_line)) return false;
 
-            int value = stoi(token.substr(1));
-            function_dont_cares.push_back(value);
-        }
+    if (!parse_dont_cares(third_line, function_dont_cares)) return false;
+
+    char notation_type;
+    vector<int> listed_terms;
+    if (!parse_terms_list(second_line, listed_terms, notation_type)) return false;
+
+    if (notation_type == 'M') {
+        convert_maxterms_to_minterms(listed_terms, function_dont_cares, variable_count, function_minterms);
+    } else {
+        function_minterms = listed_terms;
     }
+
+    if (!validate_no_overlap(function_minterms, function_dont_cares)) return false;
 
     return true;
 }
