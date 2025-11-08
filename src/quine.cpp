@@ -330,3 +330,68 @@ vector<Implicant> QuineMcCluskey::find_all_prime_implicants() const {
 
     return all_primes;
 }
+
+static map<int, vector<int>> build_coverage_chart(
+    const vector<int>& minterms,
+    const vector<Implicant>& prime_implicants) {
+
+    map<int, vector<int>> chart;
+
+    for (int minterm : minterms) {
+        for (size_t i = 0; i < prime_implicants.size(); ++i) {
+            if (prime_implicants[i].covered_minterms.count(minterm)) {
+                chart[minterm].push_back(static_cast<int>(i));
+            }
+        }
+    }
+
+    return chart;
+}
+
+static vector<int> find_essential_indices(const map<int, vector<int>>& coverage_chart) {
+    set<int> essential_set;
+
+    for (const auto& entry : coverage_chart) {
+        if (entry.second.size() == 1) {
+            essential_set.insert(entry.second[0]);
+        }
+    }
+
+    return vector<int>(essential_set.begin(), essential_set.end());
+}
+
+static set<int> get_covered_by_indices(
+    const vector<int>& pi_indices,
+    const vector<Implicant>& prime_implicants) {
+
+    set<int> covered;
+    for (int idx : pi_indices) {
+        const auto& minterms = prime_implicants[idx].covered_minterms;
+        covered.insert(minterms.begin(), minterms.end());
+    }
+    return covered;
+}
+
+vector<Implicant> QuineMcCluskey::extract_essential_prime_implicants(
+    const vector<Implicant>& prime_implicants,
+    vector<int>& uncovered_minterms) const {
+
+    auto coverage_chart = build_coverage_chart(function_minterms, prime_implicants);
+    auto essential_indices = find_essential_indices(coverage_chart);
+
+    vector<Implicant> essentials;
+    for (int idx : essential_indices) {
+        essentials.push_back(prime_implicants[idx]);
+    }
+
+    auto covered = get_covered_by_indices(essential_indices, prime_implicants);
+
+    uncovered_minterms.clear();
+    for (int minterm : function_minterms) {
+        if (!covered.count(minterm)) {
+            uncovered_minterms.push_back(minterm);
+        }
+    }
+
+    return essentials;
+}
