@@ -8,33 +8,34 @@
 #include <algorithm>
 #include <bitset>
 #include <functional>
+#include <map>
 
 using namespace std;
 
 string Implicant::as_binary_string(int variable_count) const {
-    string result;
-    for (int i = variable_count - 1; i >= 0; --i) {
-        bool is_dont_care = (dont_care_mask >> i) & 1;
+    string binary_representation;
+    for (int bit_position = variable_count - 1; bit_position >= 0; --bit_position) {
+        bool is_dont_care = (dont_care_mask >> bit_position) & 1;
         if (is_dont_care) {
-            result += '-';
+            binary_representation += '-';
         } else {
-            bool bit_value = (binary_value >> i) & 1;
-            result += bit_value ? '1' : '0';
+            bool bit_value = (binary_value >> bit_position) & 1;
+            binary_representation += bit_value ? '1' : '0';
         }
     }
-    return result;
+    return binary_representation;
 }
 
 string Implicant::as_boolean_expression(int variable_count) const {
     string expression;
 
-    for (int i = 0; i < variable_count; ++i) {
-        int bit_position = variable_count - 1 - i;
+    for (int variable_index = 0; variable_index < variable_count; ++variable_index) {
+        int bit_position = variable_count - 1 - variable_index;
         bool is_dont_care = (dont_care_mask >> bit_position) & 1;
 
         if (is_dont_care) continue;
 
-        char variable_name = 'A' + i;
+        char variable_name = 'A' + variable_index;
         bool is_complemented = !((binary_value >> bit_position) & 1);
 
         expression += variable_name;
@@ -78,18 +79,23 @@ static string trim_whitespace(string text) {
     return text;
 }
 
-static bool parse_term_value(const string& token, char expected_prefix, int& value) {
-    string trimmed = trim_whitespace(token);
-    if (trimmed.size() < 2) return false;
+/**
+ * Parses a term value from a string token (e.g., "m3" -> 3, "d5" -> 5).
+ * Assumes the token format is: prefix followed by an integer.
+ */
+static bool parse_term_value(const string& token, char expected_prefix, int& term_value) {
+    string trimmed_token = trim_whitespace(token);
+    if (trimmed_token.size() < 2) return false;
 
-    char prefix = trimmed[0];
-    if (prefix != expected_prefix && prefix != toupper(expected_prefix) &&
-        prefix != tolower(expected_prefix)) {
+    char actual_prefix = trimmed_token[0];
+    if (actual_prefix != expected_prefix &&
+        actual_prefix != toupper(expected_prefix) &&
+        actual_prefix != tolower(expected_prefix)) {
         return false;
     }
 
     try {
-        value = stoi(trimmed.substr(1));
+        term_value = stoi(trimmed_token.substr(1));
         return true;
     } catch (...) {
         return false;
@@ -101,9 +107,9 @@ static bool parse_dont_cares(const string& line, vector<int>& dont_cares) {
     if (line.empty()) return true;
 
     for (const auto& token : split_by_comma(line)) {
-        int value;
-        if (!parse_term_value(token, 'd', value)) return false;
-        dont_cares.push_back(value);
+        int dont_care_value;
+        if (!parse_term_value(token, 'd', dont_care_value)) return false;
+        dont_cares.push_back(dont_care_value);
     }
     return true;
 }
@@ -116,9 +122,9 @@ static bool parse_terms_list(const string& line, vector<int>& terms, char& notat
 
     terms.clear();
     for (const auto& token : split_by_comma(line)) {
-        int value;
-        if (!parse_term_value(token, notation_type, value)) return false;
-        terms.push_back(value);
+        int term_value;
+        if (!parse_term_value(token, notation_type, term_value)) return false;
+        terms.push_back(term_value);
     }
     return true;
 }
@@ -130,10 +136,10 @@ static bool has_mixed_notation(const string& line) {
     bool has_maxterm = false;
 
     for (const auto& token : split_by_comma(line)) {
-        string trimmed = trim_whitespace(token);
-        if (trimmed.empty()) continue;
+        string trimmed_token = trim_whitespace(token);
+        if (trimmed_token.empty()) continue;
 
-        char prefix = trimmed[0];
+        char prefix = trimmed_token[0];
         if (prefix == 'm') has_minterm = true;
         if (prefix == 'M') has_maxterm = true;
     }
@@ -141,6 +147,10 @@ static bool has_mixed_notation(const string& line) {
     return has_minterm && has_maxterm;
 }
 
+/**
+ * Converts maxterms to minterms using the complement principle.
+ * Assumes: minterms = all combinations - maxterms - don't cares
+ */
 static void convert_maxterms_to_minterms(
     const vector<int>& maxterms,
     const vector<int>& dont_cares,
@@ -152,9 +162,9 @@ static void convert_maxterms_to_minterms(
     set<int> dont_care_set(dont_cares.begin(), dont_cares.end());
 
     minterms.clear();
-    for (int i = 0; i < total_combinations; ++i) {
-        if (maxterm_set.count(i) || dont_care_set.count(i)) continue;
-        minterms.push_back(i);
+    for (int combination = 0; combination < total_combinations; ++combination) {
+        if (maxterm_set.count(combination) || dont_care_set.count(combination)) continue;
+        minterms.push_back(combination);
     }
 }
 
@@ -173,34 +183,34 @@ bool QuineMcCluskey::load_from_file(const string& file_path) {
     ifstream input_file(file_path);
     if (!input_file) return false;
 
-    string first_line, second_line, third_line;
-    if (!getline(input_file, first_line)) return false;
-    if (!getline(input_file, second_line)) second_line = "";
-    if (!getline(input_file, third_line)) third_line = "";
+    string variable_count_line, terms_line, dont_cares_line;
+    if (!getline(input_file, variable_count_line)) return false;
+    if (!getline(input_file, terms_line)) terms_line = "";
+    if (!getline(input_file, dont_cares_line)) dont_cares_line = "";
 
     try {
-        variable_count = stoi(first_line);
+        variable_count = stoi(variable_count_line);
     } catch (...) {
         return false;
     }
 
     if (variable_count <= 0 || variable_count > 20) return false;
 
-    second_line = trim_whitespace(second_line);
-    third_line = trim_whitespace(third_line);
+    terms_line = trim_whitespace(terms_line);
+    dont_cares_line = trim_whitespace(dont_cares_line);
 
-    if (has_mixed_notation(second_line)) return false;
+    if (has_mixed_notation(terms_line)) return false;
 
-    if (!parse_dont_cares(third_line, function_dont_cares)) return false;
+    if (!parse_dont_cares(dont_cares_line, function_dont_cares)) return false;
 
     char notation_type;
-    vector<int> listed_terms;
-    if (!parse_terms_list(second_line, listed_terms, notation_type)) return false;
+    vector<int> parsed_terms;
+    if (!parse_terms_list(terms_line, parsed_terms, notation_type)) return false;
 
     if (notation_type == 'M') {
-        convert_maxterms_to_minterms(listed_terms, function_dont_cares, variable_count, function_minterms);
+        convert_maxterms_to_minterms(parsed_terms, function_dont_cares, variable_count, function_minterms);
     } else {
-        function_minterms = listed_terms;
+        function_minterms = parsed_terms;
     }
 
     if (!validate_no_overlap(function_minterms, function_dont_cares)) return false;
@@ -210,35 +220,44 @@ bool QuineMcCluskey::load_from_file(const string& file_path) {
 
 // ==================== Algorithm Helper Functions ====================
 
-static int count_ones_in_value(uint64_t value, uint64_t mask) {
-    uint64_t effective_value = value & ~mask;
+/**
+ * Counts the number of 1-bits in the effective value (excluding don't-care positions).
+ */
+static int count_ones_in_value(uint64_t value, uint64_t dont_care_mask) {
+    uint64_t effective_value = value & ~dont_care_mask;
     return static_cast<int>(bitset<64>(effective_value).count());
 }
 
-static bool implicants_are_equal(const Implicant& a, const Implicant& b) {
-    return a.binary_value == b.binary_value && a.dont_care_mask == b.dont_care_mask;
+static bool implicants_are_equal(const Implicant& first_implicant, const Implicant& second_implicant) {
+    return first_implicant.binary_value == second_implicant.binary_value &&
+           first_implicant.dont_care_mask == second_implicant.dont_care_mask;
 }
 
+/**
+ * Attempts to combine two implicants if they differ by exactly one bit.
+ * Assumes: Both implicants must have identical don't-care masks to be combinable.
+ */
 static bool can_combine_implicants(
-    const Implicant& first,
-    const Implicant& second,
-    Implicant& combined) {
+    const Implicant& first_implicant,
+    const Implicant& second_implicant,
+    Implicant& combined_implicant) {
 
-    if (first.dont_care_mask != second.dont_care_mask) {
+    if (first_implicant.dont_care_mask != second_implicant.dont_care_mask) {
         return false;
     }
 
-    uint64_t bit_difference = (first.binary_value ^ second.binary_value) & ~first.dont_care_mask;
+    uint64_t bit_difference = (first_implicant.binary_value ^ second_implicant.binary_value) & ~first_implicant.dont_care_mask;
 
     if (bit_difference == 0) return false;
+    // Check if exactly one bit differs (power of 2)
     if ((bit_difference & (bit_difference - 1)) != 0) return false;
 
-    combined = first;
-    combined.binary_value &= ~bit_difference;
-    combined.dont_care_mask |= bit_difference;
-    combined.covered_minterms.clear();
-    combined.covered_minterms.insert(first.covered_minterms.begin(), first.covered_minterms.end());
-    combined.covered_minterms.insert(second.covered_minterms.begin(), second.covered_minterms.end());
+    combined_implicant = first_implicant;
+    combined_implicant.binary_value &= ~bit_difference;
+    combined_implicant.dont_care_mask |= bit_difference;
+    combined_implicant.covered_minterms.clear();
+    combined_implicant.covered_minterms.insert(first_implicant.covered_minterms.begin(), first_implicant.covered_minterms.end());
+    combined_implicant.covered_minterms.insert(second_implicant.covered_minterms.begin(), second_implicant.covered_minterms.end());
 
     return true;
 }
@@ -246,130 +265,142 @@ static bool can_combine_implicants(
 // ==================== QuineMcCluskey Algorithm ====================
 
 vector<Implicant> QuineMcCluskey::create_initial_implicants() const {
-    vector<Implicant> initial_list;
+    vector<Implicant> initial_implicants;
 
-    auto add_term = [&](int term_value) {
+    auto add_term_as_implicant = [&](int term_value) {
         Implicant implicant;
         implicant.binary_value = static_cast<uint64_t>(term_value);
         implicant.dont_care_mask = 0;
         implicant.covered_minterms.insert(term_value);
-        initial_list.push_back(implicant);
+        initial_implicants.push_back(implicant);
     };
 
     for (int minterm : function_minterms) {
-        add_term(minterm);
+        add_term_as_implicant(minterm);
     }
     for (int dont_care : function_dont_cares) {
-        add_term(dont_care);
+        add_term_as_implicant(dont_care);
     }
 
-    return initial_list;
+    return initial_implicants;
 }
 
+/**
+ * Combines implicants at the current level and identifies uncombined implicants.
+ * Returns the next level of combined implicants.
+ */
 static vector<Implicant> combine_implicant_level(
-    const vector<Implicant>& current_level,
-    vector<Implicant>& uncombined) {
+    const vector<Implicant>& current_level_implicants,
+    vector<Implicant>& uncombined_implicants) {
 
-    vector<bool> was_combined(current_level.size(), false);
-    vector<Implicant> next_level;
+    vector<bool> was_combined(current_level_implicants.size(), false);
+    vector<Implicant> next_level_implicants;
     set<pair<uint64_t, uint64_t>> seen_combinations;
 
-    for (size_t i = 0; i < current_level.size(); ++i) {
-        for (size_t j = i + 1; j < current_level.size(); ++j) {
-            Implicant combined;
-            if (can_combine_implicants(current_level[i], current_level[j], combined)) {
-                was_combined[i] = was_combined[j] = true;
+    for (size_t first_index = 0; first_index < current_level_implicants.size(); ++first_index) {
+        for (size_t second_index = first_index + 1; second_index < current_level_implicants.size(); ++second_index) {
+            Implicant combined_implicant;
+            if (can_combine_implicants(current_level_implicants[first_index],
+                                      current_level_implicants[second_index],
+                                      combined_implicant)) {
+                was_combined[first_index] = was_combined[second_index] = true;
 
-                auto key = make_pair(combined.binary_value, combined.dont_care_mask);
-                if (seen_combinations.insert(key).second) {
-                    next_level.push_back(combined);
+                auto combination_key = make_pair(combined_implicant.binary_value, combined_implicant.dont_care_mask);
+                if (seen_combinations.insert(combination_key).second) {
+                    next_level_implicants.push_back(combined_implicant);
                 }
             }
         }
     }
 
-    uncombined.clear();
-    for (size_t i = 0; i < current_level.size(); ++i) {
-        if (!was_combined[i]) {
-            uncombined.push_back(current_level[i]);
+    uncombined_implicants.clear();
+    for (size_t implicant_index = 0; implicant_index < current_level_implicants.size(); ++implicant_index) {
+        if (!was_combined[implicant_index]) {
+            uncombined_implicants.push_back(current_level_implicants[implicant_index]);
         }
     }
 
-    return next_level;
+    return next_level_implicants;
 }
 
 static void sort_by_ones_count(vector<Implicant>& implicants) {
-    sort(implicants.begin(), implicants.end(), [](const Implicant& a, const Implicant& b) {
-        int ones_a = count_ones_in_value(a.binary_value, a.dont_care_mask);
-        int ones_b = count_ones_in_value(b.binary_value, b.dont_care_mask);
-        if (ones_a != ones_b) return ones_a < ones_b;
-        if (a.dont_care_mask != b.dont_care_mask) return a.dont_care_mask < b.dont_care_mask;
-        return a.binary_value < b.binary_value;
+    sort(implicants.begin(), implicants.end(), [](const Implicant& first, const Implicant& second) {
+        int ones_count_first = count_ones_in_value(first.binary_value, first.dont_care_mask);
+        int ones_count_second = count_ones_in_value(second.binary_value, second.dont_care_mask);
+        if (ones_count_first != ones_count_second) return ones_count_first < ones_count_second;
+        if (first.dont_care_mask != second.dont_care_mask) return first.dont_care_mask < second.dont_care_mask;
+        return first.binary_value < second.binary_value;
     });
 }
 
 vector<Implicant> QuineMcCluskey::find_all_prime_implicants() const {
-    vector<Implicant> current_level = create_initial_implicants();
-    vector<Implicant> all_primes;
+    vector<Implicant> current_level_implicants = create_initial_implicants();
+    vector<Implicant> all_prime_implicants;
 
-    while (!current_level.empty()) {
-        sort_by_ones_count(current_level);
+    while (!current_level_implicants.empty()) {
+        sort_by_ones_count(current_level_implicants);
 
-        vector<Implicant> uncombined;
-        vector<Implicant> next_level = combine_implicant_level(current_level, uncombined);
+        vector<Implicant> uncombined_implicants;
+        vector<Implicant> next_level_implicants = combine_implicant_level(current_level_implicants, uncombined_implicants);
 
-        all_primes.insert(all_primes.end(), uncombined.begin(), uncombined.end());
-        current_level = move(next_level);
+        all_prime_implicants.insert(all_prime_implicants.end(), uncombined_implicants.begin(), uncombined_implicants.end());
+        current_level_implicants = move(next_level_implicants);
     }
 
-    sort(all_primes.begin(), all_primes.end());
-    all_primes.erase(
-        unique(all_primes.begin(), all_primes.end(), implicants_are_equal),
-        all_primes.end()
+    sort(all_prime_implicants.begin(), all_prime_implicants.end());
+    all_prime_implicants.erase(
+        unique(all_prime_implicants.begin(), all_prime_implicants.end(), implicants_are_equal),
+        all_prime_implicants.end()
     );
 
-    return all_primes;
+    return all_prime_implicants;
 }
 
+/**
+ * Builds a coverage chart mapping each minterm to the indices of prime implicants that cover it.
+ */
 static map<int, vector<int>> build_coverage_chart(
     const vector<int>& minterms,
     const vector<Implicant>& prime_implicants) {
 
-    map<int, vector<int>> chart;
+    map<int, vector<int>> minterm_to_prime_implicant_indices;
 
     for (int minterm : minterms) {
-        for (size_t i = 0; i < prime_implicants.size(); ++i) {
-            if (prime_implicants[i].covered_minterms.count(minterm)) {
-                chart[minterm].push_back(static_cast<int>(i));
+        for (size_t prime_index = 0; prime_index < prime_implicants.size(); ++prime_index) {
+            if (prime_implicants[prime_index].covered_minterms.count(minterm)) {
+                minterm_to_prime_implicant_indices[minterm].push_back(static_cast<int>(prime_index));
             }
         }
     }
 
-    return chart;
+    return minterm_to_prime_implicant_indices;
 }
 
+/**
+ * Finds essential prime implicants - those that are the only cover for at least one minterm.
+ */
 static vector<int> find_essential_indices(const map<int, vector<int>>& coverage_chart) {
-    set<int> essential_set;
+    set<int> essential_prime_indices;
 
-    for (const auto& entry : coverage_chart) {
-        if (entry.second.size() == 1) {
-            essential_set.insert(entry.second[0]);
+    for (const auto& minterm_coverage : coverage_chart) {
+        if (minterm_coverage.second.size() == 1) {
+            essential_prime_indices.insert(minterm_coverage.second[0]);
         }
     }
 
-    return vector<int>(essential_set.begin(), essential_set.end());
+    return vector<int>(essential_prime_indices.begin(), essential_prime_indices.end());
 }
 
 static set<int> get_covered_by_indices(
-    const vector<int>& pi_indices,
+    const vector<int>& prime_implicant_indices,
     const vector<Implicant>& prime_implicants) {
 
-    set<int> covered;
-    for (int idx : pi_indices) {
-        const auto& minterms = prime_implicants[idx].covered_minterms;
-        covered.insert(minterms.begin(), minterms.end());
+    set<int> covered_minterms;
+    for (int prime_index : prime_implicant_indices) {
+        const auto& minterms = prime_implicants[prime_index].covered_minterms;
+        covered_minterms.insert(minterms.begin(), minterms.end());
     }
-    return covered;
+    return covered_minterms;
 }
 
 vector<Implicant> QuineMcCluskey::extract_essential_prime_implicants(
@@ -379,138 +410,142 @@ vector<Implicant> QuineMcCluskey::extract_essential_prime_implicants(
     auto coverage_chart = build_coverage_chart(function_minterms, prime_implicants);
     auto essential_indices = find_essential_indices(coverage_chart);
 
-    vector<Implicant> essentials;
-    for (int idx : essential_indices) {
-        essentials.push_back(prime_implicants[idx]);
+    vector<Implicant> essential_prime_implicants;
+    for (int essential_index : essential_indices) {
+        essential_prime_implicants.push_back(prime_implicants[essential_index]);
     }
 
-    auto covered = get_covered_by_indices(essential_indices, prime_implicants);
+    auto minterms_covered_by_essentials = get_covered_by_indices(essential_indices, prime_implicants);
 
     uncovered_minterms.clear();
     for (int minterm : function_minterms) {
-        if (!covered.count(minterm)) {
+        if (!minterms_covered_by_essentials.count(minterm)) {
             uncovered_minterms.push_back(minterm);
         }
     }
 
-    return essentials;
+    return essential_prime_implicants;
 }
 
 static vector<int> get_remaining_pi_indices(
     const vector<Implicant>& prime_implicants,
-    const vector<Implicant>& essentials,
+    const vector<Implicant>& essential_prime_implicants,
     const vector<int>& uncovered_minterms) {
 
-    vector<int> remaining_indices;
+    vector<int> remaining_prime_indices;
 
-    for (size_t i = 0; i < prime_implicants.size(); ++i) {
+    for (size_t prime_index = 0; prime_index < prime_implicants.size(); ++prime_index) {
         bool is_essential = false;
-        for (const auto& essential : essentials) {
-            if (implicants_are_equal(prime_implicants[i], essential)) {
+        for (const auto& essential_implicant : essential_prime_implicants) {
+            if (implicants_are_equal(prime_implicants[prime_index], essential_implicant)) {
                 is_essential = true;
                 break;
             }
         }
         if (is_essential) continue;
 
-        bool covers_uncovered = false;
-        for (int minterm : uncovered_minterms) {
-            if (prime_implicants[i].covered_minterms.count(minterm)) {
-                covers_uncovered = true;
+        bool covers_any_uncovered = false;
+        for (int uncovered_minterm : uncovered_minterms) {
+            if (prime_implicants[prime_index].covered_minterms.count(uncovered_minterm)) {
+                covers_any_uncovered = true;
                 break;
             }
         }
 
-        if (covers_uncovered) {
-            remaining_indices.push_back(static_cast<int>(i));
+        if (covers_any_uncovered) {
+            remaining_prime_indices.push_back(static_cast<int>(prime_index));
         }
     }
 
-    return remaining_indices;
+    return remaining_prime_indices;
 }
 
 static bool combination_covers_all(
-    const vector<int>& combination,
-    const vector<int>& remaining_pi_indices,
+    const vector<int>& combination_indices,
+    const vector<int>& remaining_prime_indices,
     const vector<Implicant>& prime_implicants,
     const vector<int>& uncovered_minterms) {
 
-    set<int> covered;
-    for (int idx : combination) {
-        int pi_index = remaining_pi_indices[idx];
-        const auto& minterms = prime_implicants[pi_index].covered_minterms;
-        for (int minterm : uncovered_minterms) {
-            if (minterms.count(minterm)) {
-                covered.insert(minterm);
+    set<int> minterms_covered_by_combination;
+    for (int combination_index : combination_indices) {
+        int prime_index = remaining_prime_indices[combination_index];
+        const auto& covered_minterms = prime_implicants[prime_index].covered_minterms;
+        for (int uncovered_minterm : uncovered_minterms) {
+            if (covered_minterms.count(uncovered_minterm)) {
+                minterms_covered_by_combination.insert(uncovered_minterm);
             }
         }
     }
 
-    return covered.size() == uncovered_minterms.size();
+    return minterms_covered_by_combination.size() == uncovered_minterms.size();
 }
 
+/**
+ * Finds minimal combinations of prime implicants that cover all uncovered minterms.
+ * Assumes: Uses brute-force search up to a maximum subset size of 6 for performance.
+ */
 static vector<vector<int>> find_minimal_combinations(
-    const vector<int>& remaining_pi_indices,
+    const vector<int>& remaining_prime_indices,
     const vector<Implicant>& prime_implicants,
     const vector<int>& uncovered_minterms) {
 
-    const int max_subset_size = 6;
-    vector<vector<int>> solutions;
-    size_t total_remaining = remaining_pi_indices.size();
+    const int max_combination_size = 6;
+    vector<vector<int>> minimal_solutions;
+    size_t total_remaining_primes = remaining_prime_indices.size();
 
-    for (int size = 1; size <= min(max_subset_size, static_cast<int>(total_remaining)); ++size) {
-        vector<int> combination(size);
+    for (int combination_size = 1; combination_size <= min(max_combination_size, static_cast<int>(total_remaining_primes)); ++combination_size) {
+        vector<int> current_combination(combination_size);
 
-        function<void(int, int)> generate_combinations = [&](int start, int depth) {
-            if (depth == size) {
-                if (combination_covers_all(combination, remaining_pi_indices,
+        function<void(int, int)> generate_combinations = [&](int start_position, int current_depth) {
+            if (current_depth == combination_size) {
+                if (combination_covers_all(current_combination, remaining_prime_indices,
                                           prime_implicants, uncovered_minterms)) {
-                    solutions.push_back(combination);
+                    minimal_solutions.push_back(current_combination);
                 }
                 return;
             }
 
-            for (int i = start; i <= static_cast<int>(total_remaining) - (size - depth); ++i) {
-                combination[depth] = i;
-                generate_combinations(i + 1, depth + 1);
+            for (int position = start_position; position <= static_cast<int>(total_remaining_primes) - (combination_size - current_depth); ++position) {
+                current_combination[current_depth] = position;
+                generate_combinations(position + 1, current_depth + 1);
             }
         };
 
         generate_combinations(0, 0);
-        if (!solutions.empty()) break;
+        if (!minimal_solutions.empty()) break;
     }
 
-    return solutions;
+    return minimal_solutions;
 }
 
 vector<vector<Implicant>> QuineMcCluskey::find_minimal_covers(
     const vector<Implicant>& prime_implicants,
-    const vector<Implicant>& essentials,
+    const vector<Implicant>& essential_prime_implicants,
     const vector<int>& uncovered_minterms) const {
 
     if (uncovered_minterms.empty()) {
-        return {essentials};
+        return {essential_prime_implicants};
     }
 
-    auto remaining_indices = get_remaining_pi_indices(
-        prime_implicants, essentials, uncovered_minterms
+    auto remaining_prime_indices = get_remaining_pi_indices(
+        prime_implicants, essential_prime_implicants, uncovered_minterms
     );
 
-    auto minimal_combos = find_minimal_combinations(
-        remaining_indices, prime_implicants, uncovered_minterms
+    auto minimal_combination_indices = find_minimal_combinations(
+        remaining_prime_indices, prime_implicants, uncovered_minterms
     );
 
-    vector<vector<Implicant>> all_solutions;
-    for (const auto& combo : minimal_combos) {
-        vector<Implicant> solution = essentials;
-        for (int idx : combo) {
-            int pi_index = remaining_indices[idx];
-            solution.push_back(prime_implicants[pi_index]);
+    vector<vector<Implicant>> all_minimal_solutions;
+    for (const auto& combination_indices : minimal_combination_indices) {
+        vector<Implicant> complete_solution = essential_prime_implicants;
+        for (int combination_index : combination_indices) {
+            int prime_index = remaining_prime_indices[combination_index];
+            complete_solution.push_back(prime_implicants[prime_index]);
         }
-        all_solutions.push_back(solution);
+        all_minimal_solutions.push_back(complete_solution);
     }
 
-    return all_solutions;
+    return all_minimal_solutions;
 }
 
 MinimizationResult QuineMcCluskey::minimize() {
@@ -518,18 +553,18 @@ MinimizationResult QuineMcCluskey::minimize() {
 
     result.all_prime_implicants = find_all_prime_implicants();
 
-    vector<int> uncovered;
+    vector<int> minterms_uncovered_by_essentials;
     result.essential_prime_implicants = extract_essential_prime_implicants(
         result.all_prime_implicants,
-        uncovered
+        minterms_uncovered_by_essentials
     );
 
-    result.minterms_not_covered_by_essentials = uncovered;
+    result.minterms_not_covered_by_essentials = minterms_uncovered_by_essentials;
 
     result.all_minimal_solutions = find_minimal_covers(
         result.all_prime_implicants,
         result.essential_prime_implicants,
-        uncovered
+        minterms_uncovered_by_essentials
     );
 
     return result;
