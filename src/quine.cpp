@@ -45,3 +45,10 @@ string Implicant::as_boolean_expression(int variable_count) const {
 
     return expression.empty() ? "1" : expression;
 }
+
+bool Implicant::operator<(const Implicant& other) const {
+    if (dont_care_mask != other.dont_care_mask) {
+        return dont_care_mask < other.dont_care_mask;
+    }
+    return binary_value < other.binary_value;
+}
