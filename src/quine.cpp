@@ -395,3 +395,120 @@ vector<Implicant> QuineMcCluskey::extract_essential_prime_implicants(
 
     return essentials;
 }
+
+static vector<int> get_remaining_pi_indices(
+    const vector<Implicant>& prime_implicants,
+    const vector<Implicant>& essentials,
+    const vector<int>& uncovered_minterms) {
+
+    vector<int> remaining_indices;
+
+    for (size_t i = 0; i < prime_implicants.size(); ++i) {
+        bool is_essential = false;
+        for (const auto& essential : essentials) {
+            if (implicants_are_equal(prime_implicants[i], essential)) {
+                is_essential = true;
+                break;
+            }
+        }
+        if (is_essential) continue;
+
+        bool covers_uncovered = false;
+        for (int minterm : uncovered_minterms) {
+            if (prime_implicants[i].covered_minterms.count(minterm)) {
+                covers_uncovered = true;
+                break;
+            }
+        }
+
+        if (covers_uncovered) {
+            remaining_indices.push_back(static_cast<int>(i));
+        }
+    }
+
+    return remaining_indices;
+}
+
+static bool combination_covers_all(
+    const vector<int>& combination,
+    const vector<int>& remaining_pi_indices,
+    const vector<Implicant>& prime_implicants,
+    const vector<int>& uncovered_minterms) {
+
+    set<int> covered;
+    for (int idx : combination) {
+        int pi_index = remaining_pi_indices[idx];
+        const auto& minterms = prime_implicants[pi_index].covered_minterms;
+        for (int minterm : uncovered_minterms) {
+            if (minterms.count(minterm)) {
+                covered.insert(minterm);
+            }
+        }
+    }
+
+    return covered.size() == uncovered_minterms.size();
+}
+
+static vector<vector<int>> find_minimal_combinations(
+    const vector<int>& remaining_pi_indices,
+    const vector<Implicant>& prime_implicants,
+    const vector<int>& uncovered_minterms) {
+
+    const int max_subset_size = 6;
+    vector<vector<int>> solutions;
+    size_t total_remaining = remaining_pi_indices.size();
+
+    for (int size = 1; size <= min(max_subset_size, static_cast<int>(total_remaining)); ++size) {
+        vector<int> combination(size);
+
+        function<void(int, int)> generate_combinations = [&](int start, int depth) {
+            if (depth == size) {
+                if (combination_covers_all(combination, remaining_pi_indices,
+                                          prime_implicants, uncovered_minterms)) {
+                    solutions.push_back(combination);
+                }
+                return;
+            }
+
+            for (int i = start; i <= static_cast<int>(total_remaining) - (size - depth); ++i) {
+                combination[depth] = i;
+                generate_combinations(i + 1, depth + 1);
+            }
+        };
+
+        generate_combinations(0, 0);
+        if (!solutions.empty()) break;
+    }
+
+    return solutions;
+}
+
+vector<vector<Implicant>> QuineMcCluskey::find_minimal_covers(
+    const vector<Implicant>& prime_implicants,
+    const vector<Implicant>& essentials,
+    const vector<int>& uncovered_minterms) const {
+
+    if (uncovered_minterms.empty()) {
+        return {essentials};
+    }
+
+    auto remaining_indices = get_remaining_pi_indices(
+        prime_implicants, essentials, uncovered_minterms
+    );
+
+    auto minimal_combos = find_minimal_combinations(
+        remaining_indices, prime_implicants, uncovered_minterms
+    );
+
+    vector<vector<Implicant>> all_solutions;
+    for (const auto& combo : minimal_combos) {
+        vector<Implicant> solution = essentials;
+        for (int idx : combo) {
+            int pi_index = remaining_indices[idx];
+            solution.push_back(prime_implicants[pi_index]);
+        }
+        all_solutions.push_back(solution);
+    }
+
+    return all_solutions;
+}
