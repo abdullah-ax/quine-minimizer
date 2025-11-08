@@ -207,3 +207,38 @@ bool QuineMcCluskey::load_from_file(const string& file_path) {
 
     return true;
 }
+
+// ==================== Algorithm Helper Functions ====================
+
+static int count_ones_in_value(uint64_t value, uint64_t mask) {
+    uint64_t effective_value = value & ~mask;
+    return static_cast<int>(bitset<64>(effective_value).count());
+}
+
+static bool implicants_are_equal(const Implicant& a, const Implicant& b) {
+    return a.binary_value == b.binary_value && a.dont_care_mask == b.dont_care_mask;
+}
+
+static bool can_combine_implicants(
+    const Implicant& first,
+    const Implicant& second,
+    Implicant& combined) {
+
+    if (first.dont_care_mask != second.dont_care_mask) {
+        return false;
+    }
+
+    uint64_t bit_difference = (first.binary_value ^ second.binary_value) & ~first.dont_care_mask;
+
+    if (bit_difference == 0) return false;
+    if ((bit_difference & (bit_difference - 1)) != 0) return false;
+
+    combined = first;
+    combined.binary_value &= ~bit_difference;
+    combined.dont_care_mask |= bit_difference;
+    combined.covered_minterms.clear();
+    combined.covered_minterms.insert(first.covered_minterms.begin(), first.covered_minterms.end());
+    combined.covered_minterms.insert(second.covered_minterms.begin(), second.covered_minterms.end());
+
+    return true;
+}
