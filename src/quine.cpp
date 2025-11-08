@@ -242,3 +242,26 @@ static bool can_combine_implicants(
 
     return true;
 }
+
+// ==================== QuineMcCluskey Algorithm ====================
+
+vector<Implicant> QuineMcCluskey::create_initial_implicants() const {
+    vector<Implicant> initial_list;
+
+    auto add_term = [&](int term_value) {
+        Implicant implicant;
+        implicant.binary_value = static_cast<uint64_t>(term_value);
+        implicant.dont_care_mask = 0;
+        implicant.covered_minterms.insert(term_value);
+        initial_list.push_back(implicant);
+    };
+
+    for (int minterm : function_minterms) {
+        add_term(minterm);
+    }
+    for (int dont_care : function_dont_cares) {
+        add_term(dont_care);
+    }
+
+    return initial_list;
+}
