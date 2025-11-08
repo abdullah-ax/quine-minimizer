@@ -75,3 +75,26 @@ static string trim_whitespace(string text) {
     }
     return text;
 }
+
+bool QuineMcCluskey::load_from_file(const string& file_path) {
+    ifstream input_file(file_path);
+    if (!input_file) return false;
+
+    string first_line, second_line, third_line;
+    if (!getline(input_file, first_line)) return false;
+    if (!getline(input_file, second_line)) second_line = "";
+    if (!getline(input_file, third_line)) third_line = "";
+
+    try {
+        variable_count = stoi(first_line);
+    } catch (...) {
+        return false;
+    }
+
+    if (variable_count <= 0 || variable_count > 20) return false;
+
+    second_line = trim_whitespace(second_line);
+    third_line = trim_whitespace(third_line);
+
+    return true;
+}
