@@ -52,3 +52,16 @@ bool Implicant::operator<(const Implicant& other) const {
     }
     return binary_value < other.binary_value;
 }
+
+static vector<string> split_by_comma(const string& text) {
+    vector<string> tokens;
+    stringstream stream(text);
+    string token;
+
+    while (getline(stream, token, ',')) {
+        if (!token.empty()) {
+            tokens.push_back(token);
+        }
+    }
+    return tokens;
+}
