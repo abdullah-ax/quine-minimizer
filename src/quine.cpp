@@ -1,6 +1,9 @@
 //
 // Created by Abdullah Ahmed on 06/11/2025.
 //
+// Implementation of the Quine-McCluskey algorithm for Boolean function minimization.
+// The algorithm finds all prime implicants, identifies essential prime implicants,
+// and determines minimal cover solutions.
 
 #include "quine.h"
 #include <fstream>
@@ -12,6 +15,13 @@
 
 using namespace std;
 
+/**
+ * Converts an implicant to its binary string representation.
+ * Uses '-' for don't-care positions, '0' and '1' for fixed bits.
+ *
+ * @param variable_count Number of variables in the Boolean function
+ * @return Binary string (e.g., "1-01" for a 4-variable implicant)
+ */
 string Implicant::as_binary_string(int variable_count) const {
     string binary_representation;
     for (int bit_position = variable_count - 1; bit_position >= 0; --bit_position) {
@@ -26,6 +36,14 @@ string Implicant::as_binary_string(int variable_count) const {
     return binary_representation;
 }
 
+/**
+ * Converts an implicant to a product term in Boolean algebra notation.
+ * Variables are named A, B, C, etc. Complemented variables use apostrophe (').
+ * Don't-care positions are omitted from the expression.
+ *
+ * @param variable_count Number of variables in the Boolean function
+ * @return Boolean expression (e.g., "AB'C" or "1" for a tautology)
+ */
 string Implicant::as_boolean_expression(int variable_count) const {
     string expression;
 
@@ -47,6 +65,10 @@ string Implicant::as_boolean_expression(int variable_count) const {
     return expression.empty() ? "1" : expression;
 }
 
+/**
+ * Comparison operator for sorting and uniqueness checks.
+ * Orders by don't-care mask first, then by binary value.
+ */
 bool Implicant::operator<(const Implicant& other) const {
     if (dont_care_mask != other.dont_care_mask) {
         return dont_care_mask < other.dont_care_mask;
@@ -55,6 +77,7 @@ bool Implicant::operator<(const Implicant& other) const {
 }
 
 // ==================== Helper Functions ====================
+// These utility functions support file parsing and validation
 
 static vector<string> split_by_comma(const string& text) {
     vector<string> tokens;
@@ -179,6 +202,16 @@ static bool validate_no_overlap(const vector<int>& minterms, const vector<int>& 
 
 // ==================== QuineMcCluskey File Parsing ====================
 
+/**
+ * Loads a Boolean function from a file.
+ * Expected format:
+ *   Line 1: Number of variables (1-20)
+ *   Line 2: Minterms (e.g., "m0,m1,m3") or Maxterms (e.g., "M2,M4")
+ *   Line 3: Don't-cares (e.g., "d5,d6") - optional
+ *
+ * @param file_path Path to the input file
+ * @return true if file is successfully loaded and validated, false otherwise
+ */
 bool QuineMcCluskey::load_from_file(const string& file_path) {
     ifstream input_file(file_path);
     if (!input_file) return false;
@@ -219,6 +252,7 @@ bool QuineMcCluskey::load_from_file(const string& file_path) {
 }
 
 // ==================== Algorithm Helper Functions ====================
+// These functions support the core Quine-McCluskey algorithm operations
 
 /**
  * Counts the number of 1-bits in the effective value (excluding don't-care positions).
@@ -249,9 +283,11 @@ static bool can_combine_implicants(
     uint64_t bit_difference = (first_implicant.binary_value ^ second_implicant.binary_value) & ~first_implicant.dont_care_mask;
 
     if (bit_difference == 0) return false;
-    // Check if exactly one bit differs (power of 2)
+
+    // Check if exactly one bit differs (power of 2 check: n & (n-1) == 0)
     if ((bit_difference & (bit_difference - 1)) != 0) return false;
 
+    // Create combined implicant by setting the differing bit to don't-care
     combined_implicant = first_implicant;
     combined_implicant.binary_value &= ~bit_difference;
     combined_implicant.dont_care_mask |= bit_difference;
@@ -264,6 +300,12 @@ static bool can_combine_implicants(
 
 // ==================== QuineMcCluskey Algorithm ====================
 
+/**
+ * Creates the initial set of implicants from minterms and don't-cares.
+ * Each minterm and don't-care becomes a single-term implicant.
+ *
+ * @return Vector of initial implicants (level 0 in the algorithm)
+ */
 vector<Implicant> QuineMcCluskey::create_initial_implicants() const {
     vector<Implicant> initial_implicants;
 
@@ -305,6 +347,7 @@ static vector<Implicant> combine_implicant_level(
                                       combined_implicant)) {
                 was_combined[first_index] = was_combined[second_index] = true;
 
+                // Avoid duplicates by using a set to track unique (value, mask) pairs
                 auto combination_key = make_pair(combined_implicant.binary_value, combined_implicant.dont_care_mask);
                 if (seen_combinations.insert(combination_key).second) {
                     next_level_implicants.push_back(combined_implicant);
@@ -333,6 +376,18 @@ static void sort_by_ones_count(vector<Implicant>& implicants) {
     });
 }
 
+/**
+ * Finds all prime implicants using iterative combination.
+ *
+ * Process:
+ *   1. Start with initial implicants (one per minterm/don't-care)
+ *   2. Sort by number of 1s for efficient comparison
+ *   3. Combine implicants differing by exactly one bit
+ *   4. Collect uncombined implicants as prime implicants
+ *   5. Repeat with combined implicants until no more combinations possible
+ *
+ * @return Vector of all prime implicants found
+ */
 vector<Implicant> QuineMcCluskey::find_all_prime_implicants() const {
     vector<Implicant> current_level_implicants = create_initial_implicants();
     vector<Implicant> all_prime_implicants;
@@ -347,6 +402,7 @@ vector<Implicant> QuineMcCluskey::find_all_prime_implicants() const {
         current_level_implicants = move(next_level_implicants);
     }
 
+    // Remove duplicates that may have been found through different combination paths
     sort(all_prime_implicants.begin(), all_prime_implicants.end());
     all_prime_implicants.erase(
         unique(all_prime_implicants.begin(), all_prime_implicants.end(), implicants_are_equal),
@@ -403,6 +459,16 @@ static set<int> get_covered_by_indices(
     return covered_minterms;
 }
 
+/**
+ * Extracts essential prime implicants from the set of all prime implicants.
+ *
+ * An essential prime implicant is one that is the ONLY prime implicant
+ * covering at least one minterm. These must appear in every minimal solution.
+ *
+ * @param prime_implicants All prime implicants found
+ * @param uncovered_minterms Output: minterms not covered by essential PIs
+ * @return Vector of essential prime implicants
+ */
 vector<Implicant> QuineMcCluskey::extract_essential_prime_implicants(
     const vector<Implicant>& prime_implicants,
     vector<int>& uncovered_minterms) const {
@@ -496,6 +562,7 @@ static vector<vector<int>> find_minimal_combinations(
     for (int combination_size = 1; combination_size <= min(max_combination_size, static_cast<int>(total_remaining_primes)); ++combination_size) {
         vector<int> current_combination(combination_size);
 
+        // Recursive lambda to generate all combinations of size combination_size
         function<void(int, int)> generate_combinations = [&](int start_position, int current_depth) {
             if (current_depth == combination_size) {
                 if (combination_covers_all(current_combination, remaining_prime_indices,
@@ -512,6 +579,7 @@ static vector<vector<int>> find_minimal_combinations(
         };
 
         generate_combinations(0, 0);
+        // Early termination: stop when we find minimal solutions at this size
         if (!minimal_solutions.empty()) break;
     }
 
@@ -548,6 +616,17 @@ vector<vector<Implicant>> QuineMcCluskey::find_minimal_covers(
     return all_minimal_solutions;
 }
 
+/**
+ * Main entry point for the Quine-McCluskey minimization algorithm.
+ *
+ * Algorithm flow:
+ *   1. Find all prime implicants through iterative combination
+ *   2. Identify essential prime implicants (must be in every solution)
+ *   3. Find minimal covers for any remaining uncovered minterms
+ *   4. Return all minimal solutions
+ *
+ * @return MinimizationResult containing all PIs, essential PIs, and minimal solutions
+ */
 MinimizationResult QuineMcCluskey::minimize() {
     MinimizationResult result;
 
