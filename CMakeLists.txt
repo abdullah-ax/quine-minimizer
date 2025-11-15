@@ -9,6 +9,8 @@ add_executable(quine
         src/quine.cpp
         src/quine.h
         src/main.cpp
+        src/verilog_generator.cpp
+        src/verilog_generator.h
 )
 
 target_include_directories(quine PRIVATE src)
