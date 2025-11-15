@@ -129,6 +129,10 @@ static bool parse_dont_cares(const string& line, vector<int>& dont_cares) {
     dont_cares.clear();
     if (line.empty()) return true;
 
+    // Also accept just "d" as empty don't-cares
+    string trimmed = trim_whitespace(line);
+    if (trimmed == "d" || trimmed == "D") return true;
+
     for (const auto& token : split_by_comma(line)) {
         int dont_care_value;
         if (!parse_term_value(token, 'd', dont_care_value)) return false;
@@ -200,6 +204,16 @@ static bool validate_no_overlap(const vector<int>& minterms, const vector<int>& 
     return true;
 }
 
+static bool validate_term_range(const vector<int>& terms, int variable_count) {
+    int max_value = (1 << variable_count) - 1;  // 2^n - 1
+    for (int term : terms) {
+        if (term < 0 || term > max_value) {
+            return false;
+        }
+    }
+    return true;
+}
+
 // ==================== QuineMcCluskey File Parsing ====================
 
 /**
@@ -246,6 +260,7 @@ bool QuineMcCluskey::load_from_file(const string& file_path) {
         function_minterms = parsed_terms;
     }
 
+    if (!validate_term_range(function_minterms, variable_count)) return false;
     if (!validate_no_overlap(function_minterms, function_dont_cares)) return false;
 
     return true;
