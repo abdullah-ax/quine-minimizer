@@ -32,7 +32,8 @@ What this program does:
 - Finds minimal covers (brute-force search with limits) and prints all minimal solutions
 
 Notes:
-- See DELIVERABLES.md for task assignments between two team members.
+- Sherifa Badra (@sherifabadra) - Parsing, I/O, and testing
+- Abdullah Ahmed (@abdullah-ax) - Algorithm implementation
 - There is a test-suite of 10 inputs under `tests/`.
 
 Limitations:
