@@ -45,34 +45,7 @@ Verilog Generation (Bonus Feature):
 - Uses only primitive gates: `and`, `or`, `not` for maximum compatibility
 - Supports multi-input gates and automatic wire optimization
 - Auto-generates module names from test filenames
-- Option to save output to `.v` files
-- Optional testbench generation for verification
-
-Example Verilog output:
-```verilog
-module test1 (
-    input A, B, C,
-    output F
-);
-    wire A_n, B_n, C_n;
-    wire p0, p1;
-    
-    not g0 (A_n, A);
-    not g1 (B_n, B);
-    not g2 (C_n, C);
-    
-    and g3 (p0, A_n, B_n, C);
-    and g4 (p1, B_n, C_n);
-    
-    or g5 (F, p0, p1);
-endmodule
-```
-
-Simulation of generated Verilog:
-```
-iverilog -o sim module.v module_tb.v
-vvp sim
-```
+- Option to save output to `.v` files found in the build folder
 
 Notes:
 - Sherifa Badra (@sherifabadra) - Parsing, I/O, and testing
