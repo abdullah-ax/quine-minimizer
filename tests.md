@@ -68,11 +68,11 @@ Minterms: M2, M5, M8, M11, M14
 Don't cares: d3, d12
 ```
 
-**Expected Return:** Minimized Boolean expression for a 4-variable function with minterms 2, 5, 8, 11, 14 and don't cares 3, 12.
+**Expected Return:** Minimized Boolean expression for a 4-variable function with maxterms 2, 5, 8, 11, 14 and don't cares 3, 12.
 
 **Notes:**
-- Uses uppercase 'M' instead of lowercase 'm' for minterms
-- Parser is case-insensitive or handles both cases
+- Uses uppercase 'M' for maxterm instead of lowercase 'm' for minterms
+- Parser converts maxterms to minterms then minimizes
 - All values within valid bounds
 
 ---
