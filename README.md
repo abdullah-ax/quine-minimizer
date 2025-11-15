@@ -18,8 +18,8 @@ Run:
 
 Input file format (3 lines):
 1) number of variables (integer)
-2) minterms (m1,m3,...) OR maxterms (M0,M2,...) separated by commas
-3) don't-cares (d0,d5,...). If none, leave line empty.
+2) minterms (m1,m3,...) OR maxterms (M0,M2,...) separated by commas (to load the file, ensure minterms don't exceed the range of (2^n) - 1 where n is the number of variables)
+3) don't-cares (d0,d5,...). If none, leave line empty or just leave 'd'. (out of range don't cares are irrelevant and don't effect the minimizer in any way)
 
 Examples are in the `tests/` folder.
 
