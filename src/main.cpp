@@ -3,6 +3,8 @@
 //
 
 #include "quine.h"
+#include "verilog_generator.h"
+#include <fstream>
 #include <iostream>
 #include <iomanip>
 #include <filesystem>
@@ -147,6 +149,122 @@ void print_statistics(const MinimizationResult& result) {
     }
 }
 
+void print_verilog_prompt() {
+    cout << "\n";
+    print_separator('-', 70);
+    cout << "  Verilog Generation (Bonus Feature)\n";
+    print_separator('-', 70);
+    cout << "\nWould you like to generate a Verilog module for this function?\n";
+    cout << "  [y] Yes - Generate Verilog module\n";
+    cout << "  [n] No - Skip Verilog generation\n";
+    cout << "\nYour choice: ";
+}
+
+bool prompt_verilog_generation(
+    const MinimizationResult& result,
+    const QuineMcCluskey& minimizer,
+    const string& test_name) {
+
+    if (result.all_minimal_solutions.empty()) {
+        cout << "\nVerilog generation skipped: No minimal solution available.\n";
+        return false;
+    }
+
+    print_verilog_prompt();
+
+    string input;
+    getline(cin, input);
+
+    if (input.empty()) input = "n";
+    char choice = tolower(input[0]);
+
+    if (choice != 'y') {
+        cout << "\nVerilog generation skipped.\n";
+        return false;
+    }
+
+    // Select which solution to use if multiple exist
+    size_t solution_index = 0;
+    if (result.all_minimal_solutions.size() > 1) {
+        cout << "\nMultiple minimal solutions available ("
+             << result.all_minimal_solutions.size() << " total).\n";
+        cout << "Generate Verilog for solution number (1-"
+             << result.all_minimal_solutions.size() << ", default 1): ";
+        string sol_input;
+        getline(cin, sol_input);
+        if (!sol_input.empty()) {
+            try {
+                int sol_num = stoi(sol_input);
+                if (sol_num >= 1 && sol_num <= (int)result.all_minimal_solutions.size()) {
+                    solution_index = sol_num - 1;
+                }
+            } catch (...) {
+                // Use default
+            }
+        }
+    }
+
+    const auto& solution = result.all_minimal_solutions[solution_index];
+
+    // Generate module name from test name
+    string module_name = "boolean_function";
+    if (!test_name.empty()) {
+        module_name = test_name;
+        // Remove file extension
+        size_t dot_pos = module_name.find_last_of('.');
+        if (dot_pos != string::npos) {
+            module_name = module_name.substr(0, dot_pos);
+        }
+        // Remove path
+        size_t slash_pos = module_name.find_last_of("/\\");
+        if (slash_pos != string::npos) {
+            module_name = module_name.substr(slash_pos + 1);
+        }
+    }
+
+    // Generate Verilog
+    string verilog_code = VerilogGenerator::generate_module(
+        solution,
+        minimizer.variable_count,
+        module_name
+    );
+
+    // Display generated Verilog
+    cout << "\n";
+    print_separator('=', 70);
+    cout << "  Generated Verilog Module\n";
+    print_separator('=', 70);
+    cout << "\n" << verilog_code << "\n";
+
+    // Offer to save to file
+    cout << "Save to file? [y/n]: ";
+    getline(cin, input);
+    if (!input.empty() && tolower(input[0]) == 'y') {
+        string filename = module_name + ".v";
+        cout << "Enter filename (default: " << filename << "): ";
+        string user_filename;
+        getline(cin, user_filename);
+        if (!user_filename.empty()) {
+            filename = user_filename;
+            // Add .v extension if not present
+            if (filename.find(".v") == string::npos) {
+                filename += ".v";
+            }
+        }
+
+        ofstream verilog_file(filename);
+        if (verilog_file) {
+            verilog_file << verilog_code;
+            verilog_file.close();
+            cout << "\nVerilog module saved to: " << filename << "\n";
+        } else {
+            cerr << "\nERROR: Could not write to file: " << filename << "\n";
+        }
+    }
+
+    return true;
+}
+
 // ==================== Path Resolution ====================
 
 string find_tests_directory() {
@@ -228,6 +346,7 @@ bool run_test(const string& test_file_path) {
     print_minimal_solutions(result.all_minimal_solutions, minimizer.variable_count);
     print_statistics(result);
 
+    prompt_verilog_generation(result, minimizer, fs::path(test_file_path).filename().string());
     cout << "\nTest completed successfully.\n";
     return true;
 }
@@ -239,7 +358,7 @@ int main(int argc, char** argv) {
     print_separator('=', 70);
     cout << "  Quine-McCluskey Logic Minimizer\n";
     cout << "  CSCE2301 - Digital Design I - Fall 2025\n";
-    cout << "  Author: Abdullah Ahmed (@abdullah-ax)\n";
+    cout << "  Authors: \n Abdullah Ahmed (@abdullah-ax)\n Sherifa Badra (@sherifabadra)\n";
     print_separator('=', 70);
 
     if (argc == 2) {
